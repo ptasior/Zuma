@@ -1,5 +1,5 @@
-var bezierPoints = new Array();
 var balls = new Array();
+var b = new Bezier();
 
 var c;
 var ctx;
@@ -18,6 +18,81 @@ function Point(_x, _y)
 		dx = Math.abs(this.x - p.x);
 		dy = Math.abs(this.y - p.y);
 		return Math.sqrt(dx*dx + dy*dy);
+	}
+}
+
+function Bezier()
+{
+	this.points = new Array();
+	this.arcLen = 0;
+	
+	this.bno = function (n, k)
+	{
+		var ret = 1;
+		for(var l = 1; l <= k; l++)
+			ret *= (n-l+1)/l;
+		
+		return ret;
+	};
+	
+	this.val = function(t)
+	{
+		var n = this.len(), coef;
+		var p = new Point(0, 0);
+		
+		for(var i = 0; i < n; i++)
+		{
+			coef = Math.pow(1-t, n-i-1)*Math.pow(t,i)*this.bno(n-1,i);
+			p.x += this.points[i].x*coef;
+			p.y += this.points[i].y*coef;
+		}
+		return p; 
+	};
+	
+	this.addPoint = function(p){
+			this.points.push(p);
+			this.calcLen();
+		};
+		
+	this.movePoint = function(i, x, y){
+			this.points[i].x = x;
+			this.points[i].y = y;
+			this.calcLen();
+		};
+
+	this.len = function(){
+			return this.points.length;
+		};
+	
+	this.closeTo = function(p, dist)
+	{
+		for(var i = 0; i < this.len(); i++)
+			if(this.points[i].distance(p) < dist)
+				return i;
+		return -1;
+	}
+	
+	this.calcLen = function()
+	{
+		var eps = 0.01;
+		this.arcLen = 0;
+		
+		var pp = this.val(0), pn;
+		for(var i = eps; i <= 1; i+=eps)
+		{
+			pn = this.val(i);
+			this.arcLen += pp.distance(pn);
+			pp = pn;
+		}
+	}
+
+	this.speed = function(t)
+	{
+		var eps = 0.01;
+		pp = this.val(t+eps);
+		pn = this.val(t);
+		
+		return (pp.distance(pn)*this.len())/this.arcLen;
 	}
 }
 
@@ -42,14 +117,11 @@ function init()
 			var mx = Event.pointerX(e)-this.offsetLeft;
 			var my = Event.pointerY(e)-this.offsetTop;
 			
-			for(var i = 0; i < bezierPoints.length; i++)
-				if(bezierPoints[i].distance(new Point(mx, my)) < 8)
-				{
-					moved = i;
-					return;
-				}
+			moved = b.closeTo(new Point(mx, my), 8);
+
+			if(moved == -1)
+				b.addPoint(new Point(mx, my));
 			
-			bezierPoints.push(new Point(mx, my));
 			repaint();
 		});
 	c.observe('mouseup', function(e){
@@ -64,8 +136,7 @@ function init()
 			if(!md || moved == -1)
 				return;
 			
-			bezierPoints[moved].x =  Event.pointerX(e)-this.offsetLeft;
-			bezierPoints[moved].y =  Event.pointerY(e)-this.offsetTop;
+			b.movePoint(moved, Event.pointerX(e)-this.offsetLeft, Event.pointerY(e)-this.offsetTop);
 			
 			repaint();
 		});
@@ -91,41 +162,20 @@ function repaint()
 	ctx.fillStyle = "rgb(200,0,0)"; 
 	ctx.strokeStyle = "rgb(200,0,0)"; 
 	
-	for(var i = 0; i < bezierPoints.length; i++)
-		ctx.drawCircle(bezierPoints[i].x, bezierPoints[i].y, 5);
+	for(var i = 0; i < b.len(); i++)
+		ctx.drawCircle(b.points[i].x, b.points[i].y, 5);
 
 	drawCurve();
 	drawBalls();
 }
 
-function bno(n, k)
-{
-	var ret = 1;
-	for(var l = 1; l <= k; l++)
-		ret *= (n-l+1)/l;
-	
-	return ret;
-}
-function bezier(t)
-{
-	var n = bezierPoints.length, coef;
-	var p = new Point(0, 0);
-	
-	for(var i = 0; i < n; i++)
-	{
-		coef = Math.pow(1-t, n-i-1)*Math.pow(t,i)*bno(n-1,i);
-		p.x += bezierPoints[i].x*coef;
-		p.y += bezierPoints[i].y*coef;
-	}
-	return p; 
-}
 
 function drawCurve()
 {
-	var pp = bezier(0), p;
+	var pp = b.val(0), p;
 	for(var t = 0.01; t <= 1; t+=0.01)
 	{
-		p = bezier(t);
+		p = b.val(t);
 		ctx.drawLine(pp.x, pp.y, p.x, p.y);
 		pp = p;
 	}
@@ -135,17 +185,17 @@ function drawBalls()
 {
 	for(var i = 0; i < balls.length; i++)
 	{
-		var p = bezier(balls[i].t);
+		var p = b.val(balls[i].t);
 		ctx.drawCircle(p.x, p.y, 10);
 	}
 }
 
 window.onload = function(){
 	init();
-	bezierPoints.push(new Point(10,15));
-	bezierPoints.push(new Point(10,255));
-	bezierPoints.push(new Point(400,105));
-	bezierPoints.push(new Point(300,335));
+	b.addPoint(new Point(10,15));
+	b.addPoint(new Point(10,255));
+	b.addPoint(new Point(400,105));
+	b.addPoint(new Point(300,335));
 	repaint();
 };
 
@@ -157,7 +207,7 @@ function start()
 	balls.push(new Ball(0.05));
 	pe = new PeriodicalExecuter(function(pe) {
 			for(var i = 0; i < balls.length; i++)
-				balls[i].t += 0.005;
+				balls[i].t += 0.05*b.speed(balls[i].t);
 			repaint();
-		}, 0.01);
+		}, 0.05);
 }
