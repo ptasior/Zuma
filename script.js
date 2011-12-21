@@ -25,21 +25,21 @@ function Bezier()
 {
 	this.points = new Array();
 	this.arcLen = 0;
-	
+
 	this.bno = function (n, k)
 	{
 		var ret = 1;
 		for(var l = 1; l <= k; l++)
 			ret *= (n-l+1)/l;
-		
+
 		return ret;
-	};
-	
+	}
+
 	this.val = function(t)
 	{
 		var n = this.len(), coef;
 		var p = new Point(0, 0);
-		
+
 		for(var i = 0; i < n; i++)
 		{
 			coef = Math.pow(1-t, n-i-1)*Math.pow(t,i)*this.bno(n-1,i);
@@ -47,23 +47,26 @@ function Bezier()
 			p.y += this.points[i].y*coef;
 		}
 		return p; 
-	};
-	
-	this.addPoint = function(p){
-			this.points.push(p);
-			this.calcLen();
-		};
-		
-	this.movePoint = function(i, x, y){
-			this.points[i].x = x;
-			this.points[i].y = y;
-			this.calcLen();
-		};
+	}
 
-	this.len = function(){
-			return this.points.length;
-		};
-	
+	this.addPoint = function(p)
+	{
+		this.points.push(p);
+		this.calcLen();
+	}
+
+	this.movePoint = function(i, x, y)
+	{
+		this.points[i].x = x;
+		this.points[i].y = y;
+		this.calcLen();
+	}
+
+	this.len = function()
+	{
+		return this.points.length;
+	}
+
 	this.closeTo = function(p, dist)
 	{
 		for(var i = 0; i < this.len(); i++)
@@ -71,10 +74,10 @@ function Bezier()
 				return i;
 		return -1;
 	}
-	
+
 	this.calcLen = function()
 	{
-		var eps = 0.01;
+		var eps = 0.0001;
 		this.arcLen = 0;
 		
 		var pp = this.val(0), pn;
@@ -88,20 +91,31 @@ function Bezier()
 
 	this.speed = function(t)
 	{
-		var eps = 0.01;
+		var eps = 0.0001;
 		pp = this.val(t+eps);
 		pn = this.val(t);
 		
-		return (pp.distance(pn)*this.len())/this.arcLen;
+		return (pp.distance(pn)/eps)/this.arcLen;
 	}
 }
 
 function Ball(t)
 {
+	Ball.SIZE = 10;
+	
 	this.t = t;
-	this.colorR = Math.random()*255;
-	this.colorG = Math.random()*255;
-	this.colorB = Math.random()*255;
+	this.colorStr = 'rgb('+Math.floor(Math.random()*255)+','+Math.floor(Math.random()*255)+','+Math.floor(Math.random()*255)+')';
+	this.step = 0.00003 *b.arcLen;
+	
+	this.position = function()
+	{
+		return b.val(this.t);
+	}
+	
+	this.move = function()
+	{
+		this.t += this.step / b.speed(this.t);
+	}
 }
 
 function init()
@@ -145,7 +159,8 @@ function init()
 	ctx.drawCircle = function(x,y,r){
 		this.beginPath();
 		this.arc(x, y, r, 0, Math.PI*2, true);
-		this.stroke();  
+// 		this.fill();
+		this.stroke();
 	}
 	
 	ctx.drawLine = function(x1, y1, x2, y2){
@@ -173,6 +188,7 @@ function repaint()
 function drawCurve()
 {
 	var pp = b.val(0), p;
+	ctx.strokeStyle = "rgb(200,0,0)"; 
 	for(var t = 0.01; t <= 1; t+=0.01)
 	{
 		p = b.val(t);
@@ -186,7 +202,8 @@ function drawBalls()
 	for(var i = 0; i < balls.length; i++)
 	{
 		var p = b.val(balls[i].t);
-		ctx.drawCircle(p.x, p.y, 10);
+		ctx.strokeStyle = balls[i].colorStr;
+		ctx.drawCircle(p.x, p.y, Ball.SIZE);
 	}
 }
 
@@ -204,10 +221,14 @@ function start()
 	if(pe)
 		pe.stop();
 	balls.push(new Ball(0));
-	balls.push(new Ball(0.05));
+	balls.push(new Ball(1/Math.floor(b.arcLen/Ball.SIZE)));
+	$('label').innerHTML = Math.floor(b.arcLen/Ball.SIZE);
 	pe = new PeriodicalExecuter(function(pe) {
 			for(var i = 0; i < balls.length; i++)
-				balls[i].t += 0.05*b.speed(balls[i].t);
+			{
+				balls[i].move();
+// 				$('label').innerHTML = balls[0].position().distance(balls[1].position());
+			}
 			repaint();
 		}, 0.05);
 }
